@@ -1,0 +1,21 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+.env
+dist/
+build/
+# *.spec  <-- Keep .spec files in repo for consistent builds!
+
+# Local Persistent Data
+settings.json
+download_history.json
+
+# IDEs
+.vscode/
+.idea/
+.gemini/
+
+# OS
+.DS_Store
+Thumbs.db
