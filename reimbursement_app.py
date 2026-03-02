@@ -468,7 +468,7 @@ class ReimbursementApp(tk.Tk):
             print(f"Error saving settings: {e}")
 
     def load_history(self):
-        """Loads the list of already processed transaction IDs."""
+        """Loads the list of already processed Voucher Numbers."""
         path = get_history_path()
         if os.path.exists(path):
             try:
@@ -479,7 +479,7 @@ class ReimbursementApp(tk.Tk):
         return {}
 
     def save_to_history(self, trans_id, mode):
-        """Saves a processed transaction ID to the local history log."""
+        """Saves a processed Voucher Number to the local history log."""
         path = get_history_path()
         history = self.load_history()
         # Key by ID, store mode and timestamp
@@ -671,23 +671,28 @@ class ReimbursementApp(tk.Tk):
             all_reimb_dfs = []
             all_details_dfs = []
             
-            main_sheet_name = "All_General_Vouchers"
+            main_sheet_candidates = ["All_General_Vouchers", "GGN_Warehouse_General_Vouchers"]
             details_sheet_name = "Expense Details"
             
             if self.current_mode == "VOUCHER":
-                main_sheet_name = "All_Job_Related_Vouchers"
-                details_sheet_name = "Expense Details"
+                main_sheet_candidates = ["All_Job_Related_Vouchers"]
 
             for f in files:
                 xl = pd.ExcelFile(f)
                 sheet_names = xl.sheet_names
-                if main_sheet_name in sheet_names:
-                    all_reimb_dfs.append(xl.parse(main_sheet_name))
+                
+                # Search for any of the valid main sheet candidates
+                for candidate in main_sheet_candidates:
+                    if candidate in sheet_names:
+                        all_reimb_dfs.append(xl.parse(candidate))
+                        break
+
                 if details_sheet_name in sheet_names:
                     all_details_dfs.append(xl.parse(details_sheet_name))
             
             if not all_reimb_dfs:
-                messagebox.showerror("Error", f"No '{main_sheet_name}' sheet found.")
+                expected_sheets = " or ".join([f"'{s}'" for s in main_sheet_candidates])
+                messagebox.showerror("Error", f"No {expected_sheets} sheet found.")
                 return
 
             self.reimbursement_data = pd.concat(all_reimb_dfs).drop_duplicates(subset=['ID'])
@@ -777,7 +782,13 @@ class ReimbursementApp(tk.Tk):
         else: cc = "General"
         
         fiscal_year = self.fiscal_year.get()
-        job_fmt = job_val 
+        
+        # Pad job_val to 4 digits if it's numeric for Logisys compatibility
+        job_val_str = str(job_val).strip()
+        if job_val_str.isdigit():
+            job_val_str = job_val_str.zfill(4)
+        
+        job_fmt = job_val_str
         
         # Branch Codes from Image: 
         # HARYANA -> GGN (GEN mode), HAR (CCL mode)
@@ -794,17 +805,17 @@ class ReimbursementApp(tk.Tk):
         
         if branch == "HO":
             if lob == "GEN": 
-                job_fmt = f"HO/Gen/{job_val}/{fiscal_year}"
+                job_fmt = f"HO/Gen/{job_val_str}/{fiscal_year}"
             else:
                 prefix = "ER" if "EXP" in lob else "IR"
-                job_fmt = f"{prefix}/{job_val}/{fiscal_year}"
+                job_fmt = f"{prefix}/{job_val_str}/{fiscal_year}"
         else:
             if lob == "GEN":
                 code = br_code_gen or br_code_ccl
-                job_fmt = f"WH/{code}/{job_val}/{fiscal_year}" if code else f"WH/{job_val}/{fiscal_year}"
+                job_fmt = f"WH/{code}/{job_val_str}/{fiscal_year}" if code else f"WH/{job_val_str}/{fiscal_year}"
             else:
                 prefix = "ER" if "EXP" in lob else "IR"
-                job_fmt = f"{prefix}/{br_code_ccl}/{job_val}/{fiscal_year}" if br_code_ccl else f"{prefix}/{job_val}/{fiscal_year}"
+                job_fmt = f"{prefix}/{br_code_ccl}/{job_val_str}/{fiscal_year}" if br_code_ccl else f"{prefix}/{job_val_str}/{fiscal_year}"
                 
         return cc, job_fmt
 
@@ -858,7 +869,8 @@ class ReimbursementApp(tk.Tk):
             if refs.get('badge_label'): refs['badge_label'].configure(text=f"[{new_job_fmt}]")
 
         for _, row in self.reimbursement_data.iterrows():
-            trans_id = row['Transaction ID']
+            # Robustly get the transaction ID/Voucher number
+            trans_id = row.get('Voucher Number', row.get('Transaction ID', ''))
             formatted_date = self.format_date(row['Payment Date'])
             parent_id = row['ID']
             emp_name = row['Employee Name']
@@ -870,7 +882,7 @@ class ReimbursementApp(tk.Tk):
             header = ttk.Frame(group_frame)
             header.pack(fill="x", padx=5, pady=5)
             
-            header_text = f"Transaction ID: {trans_id}  |  {emp_name}"
+            header_text = f"Voucher Number: {trans_id}  |  {emp_name}"
             if self.current_mode != "VOUCHER":
                 header_text += f"  |  {formatted_date}"
             
@@ -1003,14 +1015,14 @@ class ReimbursementApp(tk.Tk):
         if not output_dir:
             return  # User cancelled folder selection
         
-        # Scan for existing transaction IDs in the persistent history log
+        # Scan for existing Voucher Numbers in the persistent history log
         history = self.load_history()
         
         duplicate_transactions = []
         
         # Check each transaction for history matches
         for _, row in self.reimbursement_data.iterrows():
-            trans_id_str = str(row['Transaction ID'])
+            trans_id_str = str(row.get('Voucher Number', row.get('Transaction ID', '')))
             
             # If ID exists in history for the current mode, it's a duplicate
             if trans_id_str in history:
@@ -1024,7 +1036,7 @@ class ReimbursementApp(tk.Tk):
         if duplicate_transactions:
             duplicate_list = "\n".join([f"  • {tid}" for tid in duplicate_transactions])
             mode_name = "GENERAL VOUCHER" if self.current_mode == "REIMBURSEMENT" else "JOB VOUCHER"
-            warning_message = (f"⚠️ WARNING: {mode_name} output files already exist for the following Transaction IDs:\n\n"
+            warning_message = (f"⚠️ WARNING: {mode_name} output files already exist for the following Voucher Numbers:\n\n"
                                f"{duplicate_list}\n\n"
                                "What would you like to do?\n"
                                "• Click [Yes] to OVERWRITE all existing files.\n"
@@ -1052,7 +1064,8 @@ class ReimbursementApp(tk.Tk):
 
             generated_count = 0
             for _, row in self.reimbursement_data.iterrows():
-                trans_id, fmt_date, parent_id = row['Transaction ID'], self.format_date(row['Payment Date']), row['ID']
+                trans_id = row.get('Voucher Number', row.get('Transaction ID', ''))
+                fmt_date, parent_id = self.format_date(row['Payment Date']), row['ID']
                 
                 # Logic to skip duplicates if requested
                 if skip_duplicates and str(trans_id) in duplicate_transactions:
