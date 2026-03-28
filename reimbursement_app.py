@@ -1123,7 +1123,7 @@ class ReimbursementApp(tk.Tk):
                         csv_row.update({
                             'LedgerName': selected_val, 
                             'AmountHC': amt, 
-                            'AmtType': "DEBIT" if self.current_mode == "VOUCHER" else cr_dr, 
+                            'AmtType': "DEBIT", 
                             'Branch': out_branch, 
                             'CostCenter': out_cost_center, 
                             'Remarks': desc, 
