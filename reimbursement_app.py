@@ -672,10 +672,12 @@ class ReimbursementApp(tk.Tk):
             all_details_dfs = []
             
             main_sheet_candidates = ["All_General_Vouchers", "GGN_Warehouse_General_Vouchers"]
-            details_sheet_name = "Expense Details"
+            details_sheet_candidates = ["Expense Details"]
             
             if self.current_mode == "VOUCHER":
                 main_sheet_candidates = ["All_Job_Related_Vouchers"]
+                # Job vouchers can have either Expense Details or Misc Details
+                details_sheet_candidates = ["Expense Details", "Misc Details"]
 
             for f in files:
                 xl = pd.ExcelFile(f)
@@ -687,12 +689,25 @@ class ReimbursementApp(tk.Tk):
                         all_reimb_dfs.append(xl.parse(candidate))
                         break
 
-                if details_sheet_name in sheet_names:
-                    all_details_dfs.append(xl.parse(details_sheet_name))
+                # Search for any valid details sheet (mutually exclusive per file)
+                for details_candidate in details_sheet_candidates:
+                    if details_candidate in sheet_names:
+                        details_df = xl.parse(details_candidate)
+                        # Normalize Misc Details columns to match Expense Details schema
+                        if details_candidate == "Misc Details":
+                            if 'Job Number' in details_df.columns:
+                                details_df.rename(columns={'Job Number': 'JOB NO'}, inplace=True)
+                        all_details_dfs.append(details_df)
+                        break
             
             if not all_reimb_dfs:
                 expected_sheets = " or ".join([f"'{s}'" for s in main_sheet_candidates])
                 messagebox.showerror("Error", f"No {expected_sheets} sheet found.")
+                return
+            
+            if not all_details_dfs:
+                expected_details = " or ".join([f"'{s}'" for s in details_sheet_candidates])
+                messagebox.showerror("Error", f"No {expected_details} sheet found in the uploaded file(s).")
                 return
 
             self.reimbursement_data = pd.concat(all_reimb_dfs).drop_duplicates(subset=['ID'])
