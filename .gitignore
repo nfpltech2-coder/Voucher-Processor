@@ -5,7 +5,9 @@ __pycache__/
 .env
 dist/
 build/
-# *.spec  <-- Keep .spec files in repo for consistent builds!
+*.spec
+*.xlsx
+*.csv
 
 # Local Persistent Data
 settings.json
@@ -19,3 +21,4 @@ download_history.json
 # OS
 .DS_Store
 Thumbs.db
+
